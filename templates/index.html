@@ -196,6 +196,50 @@
             transform: none;
         }
 
+        .citations-container {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.8rem;
+        }
+
+        .citations-header {
+            font-weight: 600;
+            color: #38bdf8;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .citation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .citation-card {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 8px 12px;
+        }
+
+        .citation-card-title {
+            font-weight: 500;
+            color: #f1f5f9;
+            margin-bottom: 2px;
+        }
+
+        .citation-card-source {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
@@ -208,15 +252,15 @@
             <div class="header-info">
                 <div class="azure-badge">☁️</div>
                 <div class="header-title">
-                    <h1>Azure Python Chatbot</h1>
-                    <p><span class="status-dot"></span> Azure App Service Ready</p>
+                    <h1>Azure AI Agent Chatbot</h1>
+                    <p><span class="status-dot"></span> App Service Secured</p>
                 </div>
             </div>
         </header>
 
         <main class="chat-messages" id="chatMessages">
             <div class="message bot">
-                👋 Hello! Welcome to your Python Chatbot deployed on Azure Web App. How can I help you today?
+                👋 Hello! Welcome to your secure Enterprise Assistant. I am connected directly to your Azure AI Foundry Agent using System-Assigned Managed Identity. How can I help you today?
             </div>
         </main>
 
@@ -234,10 +278,52 @@
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
 
-        function appendMessage(text, sender) {
+        let activeThreadId = ""; // Retains session state across messages
+
+        function appendMessage(text, sender, citations = []) {
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message', sender);
-            msgDiv.textContent = text;
+            
+            // Text part
+            const textSpan = document.createElement('span');
+            textSpan.style.whiteSpace = 'pre-wrap';
+            textSpan.textContent = text;
+            msgDiv.appendChild(textSpan);
+
+            // Citations part (only for bot responses with citations)
+            if (sender === 'bot' && citations && citations.length > 0) {
+                const citeContainer = document.createElement('div');
+                citeContainer.classList.add('citations-container');
+
+                const header = document.createElement('div');
+                header.classList.add('citations-header');
+                header.innerHTML = '🔍 References & Citations';
+                citeContainer.appendChild(header);
+
+                const list = document.createElement('div');
+                list.classList.add('citation-list');
+
+                citations.forEach(cite => {
+                    const card = document.createElement('div');
+                    card.classList.add('citation-card');
+
+                    const title = document.createElement('div');
+                    title.classList.add('citation-card-title');
+                    title.textContent = `[${cite.index}] ${cite.text || 'Document Reference'}`;
+                    card.appendChild(title);
+
+                    const src = document.createElement('div');
+                    src.classList.add('citation-card-source');
+                    src.textContent = cite.source || 'Azure AI internal search query result.';
+                    card.appendChild(src);
+
+                    list.appendChild(card);
+                });
+
+                citeContainer.appendChild(list);
+                msgDiv.appendChild(citeContainer);
+            }
+
             chatMessages.appendChild(msgDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -256,11 +342,21 @@
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    body: JSON.stringify({ 
+                        message: text,
+                        thread_id: activeThreadId
+                    })
                 });
+                
                 const data = await res.json();
+                
+                // Track active thread id for subsequent requests
+                if (data.thread_id) {
+                    activeThreadId = data.thread_id;
+                }
+
                 if (data.reply) {
-                    appendMessage(data.reply, 'bot');
+                    appendMessage(data.reply, 'bot', data.citations);
                 } else {
                     appendMessage("Error: Could not retrieve response from server.", 'bot');
                 }
