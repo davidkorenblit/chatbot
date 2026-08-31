@@ -26,8 +26,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Global client cache
+# Global client caches
 _project_client = None
+_openai_client = None
 
 
 def get_config():
@@ -40,102 +41,23 @@ def get_config():
     return project_endpoint, agent_name
 
 
-def get_ai_project_client(project_endpoint: str) -> AIProjectClient:
+def get_openai_assistants_client(project_endpoint: str):
     """
-    Initializes or returns cached AIProjectClient authenticated via
-    Azure System-Assigned Managed Identity using DefaultAzureCredential with the Foundry Project Endpoint.
+    Initializes or returns cached OpenAI Assistants client via AIProjectClient.get_openai_client().
+    In azure-ai-projects v2.x, the Assistants API is accessed through the OpenAI compatibility layer:
+        client.get_openai_client().beta.threads / .messages / .runs
     """
-    global _project_client
-    if _project_client is None:
-        logger.info("Initializing AIProjectClient using DefaultAzureCredential with Foundry Project Endpoint...")
+    global _project_client, _openai_client
+    if _openai_client is None:
+        logger.info("Initializing AIProjectClient with Foundry Project Endpoint...")
         credential = DefaultAzureCredential()
         _project_client = AIProjectClient(
             endpoint=project_endpoint,
             credential=credential
         )
-        logger.info("AIProjectClient initialized successfully.")
-    return _project_client
-
-
-# --- Cross-Version SDK Compatibility Helpers (Supports azure-ai-projects 1.x & 2.x+) ---
-def get_agents_handler(client: AIProjectClient):
-    """
-    Returns an interface for threads, messages, and runs whether using
-    azure-ai-projects 2.x+ (via get_openai_client().beta.threads) or 1.x (via client.agents).
-    """
-    if hasattr(client, "get_openai_client"):
-        return "openai", client.get_openai_client()
-    elif hasattr(client, "agents"):
-        return "agents", client.agents
-    raise AttributeError("AIProjectClient has neither 'get_openai_client' nor 'agents'.")
-
-
-def create_agent_thread(client: AIProjectClient):
-    mode, handler = get_agents_handler(client)
-    if mode == "openai":
-        return handler.beta.threads.create()
-    else:
-        if hasattr(handler, "create_thread"):
-            return handler.create_thread()
-        elif hasattr(handler, "threads") and hasattr(handler.threads, "create"):
-            return handler.threads.create()
-        raise AttributeError("Could not create thread with current SDK structure.")
-
-
-def create_agent_message(client: AIProjectClient, thread_id: str, role: str, content: str):
-    mode, handler = get_agents_handler(client)
-    if mode == "openai":
-        return handler.beta.threads.messages.create(thread_id=thread_id, role=role, content=content)
-    else:
-        if hasattr(handler, "create_message"):
-            return handler.create_message(thread_id=thread_id, role=role, content=content)
-        elif hasattr(handler, "messages") and hasattr(handler.messages, "create"):
-            return handler.messages.create(thread_id=thread_id, role=role, content=content)
-        raise AttributeError("Could not create message with current SDK structure.")
-
-
-def create_agent_run(client: AIProjectClient, thread_id: str, agent_name: str):
-    mode, handler = get_agents_handler(client)
-    if mode == "openai":
-        return handler.beta.threads.runs.create(thread_id=thread_id, assistant_id=agent_name)
-    else:
-        if hasattr(handler, "create_run"):
-            try:
-                return handler.create_run(thread_id=thread_id, assistant_id=agent_name)
-            except TypeError:
-                return handler.create_run(thread_id=thread_id, agent_id=agent_name)
-        elif hasattr(handler, "runs") and hasattr(handler.runs, "create"):
-            try:
-                return handler.runs.create(thread_id=thread_id, assistant_id=agent_name)
-            except TypeError:
-                return handler.runs.create(thread_id=thread_id, agent_id=agent_name)
-        raise AttributeError("Could not create run with current SDK structure.")
-
-
-def get_agent_run(client: AIProjectClient, thread_id: str, run_id: str):
-    mode, handler = get_agents_handler(client)
-    if mode == "openai":
-        return handler.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-    else:
-        if hasattr(handler, "get_run"):
-            return handler.get_run(thread_id=thread_id, run_id=run_id)
-        elif hasattr(handler, "runs") and hasattr(handler.runs, "get"):
-            return handler.runs.get(thread_id=thread_id, run_id=run_id)
-        elif hasattr(handler, "runs") and hasattr(handler.runs, "retrieve"):
-            return handler.runs.retrieve(thread_id=thread_id, run_id=run_id)
-        raise AttributeError("Could not get run status with current SDK structure.")
-
-
-def list_agent_messages(client: AIProjectClient, thread_id: str):
-    mode, handler = get_agents_handler(client)
-    if mode == "openai":
-        return handler.beta.threads.messages.list(thread_id=thread_id)
-    else:
-        if hasattr(handler, "list_messages"):
-            return handler.list_messages(thread_id=thread_id)
-        elif hasattr(handler, "messages") and hasattr(handler.messages, "list"):
-            return handler.messages.list(thread_id=thread_id)
-        raise AttributeError("Could not list messages with current SDK structure.")
+        _openai_client = _project_client.get_openai_client()
+        logger.info("OpenAI Assistants client initialized successfully via AIProjectClient.get_openai_client().")
+    return _openai_client
 
 
 @app.route("/")
@@ -162,6 +84,8 @@ def chat():
     """
     Server-side chat endpoint proxying requests securely to Azure AI Foundry Agent.
     All token acquisition, agent execution, and API calls are handled strictly on the backend.
+
+    SDK: azure-ai-projects v2.x — uses get_openai_client().beta.threads API.
     """
     # 1. Configuration Validation
     project_endpoint, agent_name = get_config()
@@ -192,33 +116,35 @@ def chat():
         }), 400
 
     try:
-        # 3. Client Initialization (System-Assigned Managed Identity via DefaultAzureCredential)
-        client = get_ai_project_client(project_endpoint)
+        # 3. Client Initialization (Managed Identity via DefaultAzureCredential)
+        openai_client = get_openai_assistants_client(project_endpoint)
 
         # 4. Thread Lifecycle Management
+        #    API: openai_client.beta.threads.create()
         if not thread_id:
             logger.info("Creating new conversation thread on Azure AI Foundry...")
-            thread = create_agent_thread(client)
+            thread = openai_client.beta.threads.create()
             thread_id = thread.id
             logger.info(f"Thread created with ID: {thread_id}")
 
         # 5. Append User Message
-        create_agent_message(
-            client=client,
+        #    API: openai_client.beta.threads.messages.create(thread_id, role, content)
+        openai_client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=user_message
         )
 
         # 6. Execute Agent Run
+        #    API: openai_client.beta.threads.runs.create(thread_id, assistant_id)
         logger.info(f"Triggering Agent run for thread '{thread_id}' with Agent '{agent_name}'...")
-        run = create_agent_run(
-            client=client,
+        run = openai_client.beta.threads.runs.create(
             thread_id=thread_id,
-            agent_name=agent_name
+            assistant_id=agent_name
         )
 
         # 7. Poll Run Status with Timeout Protection
+        #    API: openai_client.beta.threads.runs.retrieve(run_id, thread_id)
         poll_start = time.time()
         timeout_seconds = 45
 
@@ -232,7 +158,10 @@ def chat():
                 }), 504
 
             time.sleep(1)
-            run = get_agent_run(client=client, thread_id=thread_id, run_id=run.id)
+            run = openai_client.beta.threads.runs.retrieve(
+                run_id=run.id,
+                thread_id=thread_id
+            )
 
         if run.status != "completed":
             logger.error(f"Agent run failed with status: '{run.status}'. Run error details: {getattr(run, 'last_error', None)}")
@@ -244,7 +173,8 @@ def chat():
             }), 502
 
         # 8. Retrieve Messages & Parse Annotations/Citations
-        messages = list_agent_messages(client=client, thread_id=thread_id)
+        #    API: openai_client.beta.threads.messages.list(thread_id)
+        messages = openai_client.beta.threads.messages.list(thread_id=thread_id)
         assistant_reply = ""
         citations = []
 
@@ -253,7 +183,7 @@ def chat():
                 for content_part in msg.content:
                     if content_part.type == "text":
                         assistant_reply = content_part.text.value
-                        
+
                         # Extract citations from annotations
                         if hasattr(content_part.text, "annotations") and content_part.text.annotations:
                             for idx, annotation in enumerate(content_part.text.annotations):
