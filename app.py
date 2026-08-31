@@ -31,14 +31,26 @@ _project_client = None
 _openai_client = None
 
 
+import re
+
 def get_config():
     """
     Retrieves required Azure AI connection settings exclusively from environment variables.
-    Never hardcode endpoints, keys, or agent identifiers.
+    Automatically sanitizes any accidental 'endpoint: ' prefix or trailing subpaths.
     """
-    project_endpoint = os.getenv("FOUNDRY_PROJECT_ENDPOINT", "").strip()
+    raw_endpoint = os.getenv("FOUNDRY_PROJECT_ENDPOINT", "").strip()
     agent_name = os.getenv("AGENT_NAME", "").strip()
+
+    # Clean up endpoint if it has 'endpoint: ' prefix or trailing protocol paths
+    project_endpoint = raw_endpoint
+    if project_endpoint:
+        project_endpoint = re.sub(r'^[a-zA-Z_-]+:\s*', '', project_endpoint)
+        if "/agents/" in project_endpoint:
+            project_endpoint = project_endpoint.split("/agents/")[0]
+        project_endpoint = project_endpoint.rstrip("/")
+
     return project_endpoint, agent_name
+
 
 
 def get_openai_assistants_client(project_endpoint: str):
@@ -265,12 +277,22 @@ def chat():
         }), 503
 
     except Exception as e:
+        # Check for openai APIConnectionError
+        if type(e).__name__ == "APIConnectionError" or "APIConnectionError" in str(type(e)):
+            logger.error(f"OpenAI APIConnectionError: {e}")
+            return jsonify({
+                "error": "ConnectionError",
+                "message": "Failed to connect to Azure AI Foundry endpoint. Please verify FOUNDRY_PROJECT_ENDPOINT URL.",
+                "details": str(e)
+            }), 503
+
         logger.exception(f"Unexpected error processing chat request: {e}")
         return jsonify({
             "error": "InternalServerError",
             "message": "An unexpected error occurred while communicating with the Azure AI Foundry Agent.",
             "details": str(e)
         }), 500
+
 
 
 if __name__ == "__main__":
