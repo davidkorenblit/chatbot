@@ -33,24 +33,24 @@ _project_client = None
 def get_config():
     """
     Retrieves required Azure AI connection settings exclusively from environment variables.
-    Never hardcode connection strings, keys, or agent IDs.
+    Never hardcode endpoints, keys, or agent identifiers.
     """
-    connection_string = os.getenv("AZURE_AI_PROJECT_CONNECTION_STRING", "").strip()
-    agent_id = os.getenv("AZURE_AI_AGENT_ID", "").strip()
-    return connection_string, agent_id
+    project_endpoint = os.getenv("FOUNDRY_PROJECT_ENDPOINT", "").strip()
+    agent_name = os.getenv("AGENT_NAME", "").strip()
+    return project_endpoint, agent_name
 
 
-def get_ai_project_client(connection_string: str) -> AIProjectClient:
+def get_ai_project_client(project_endpoint: str) -> AIProjectClient:
     """
     Initializes or returns cached AIProjectClient authenticated via
-    Azure System-Assigned Managed Identity using DefaultAzureCredential.
+    Azure System-Assigned Managed Identity using DefaultAzureCredential with the Foundry Project Endpoint.
     """
     global _project_client
     if _project_client is None:
-        logger.info("Initializing AIProjectClient using DefaultAzureCredential (Managed Identity)...")
+        logger.info("Initializing AIProjectClient using DefaultAzureCredential with Foundry Project Endpoint...")
         credential = DefaultAzureCredential()
-        _project_client = AIProjectClient.from_connection_string(
-            conn_str=connection_string,
+        _project_client = AIProjectClient(
+            endpoint=project_endpoint,
             credential=credential
         )
         logger.info("AIProjectClient initialized successfully.")
@@ -66,13 +66,13 @@ def home():
 @app.route("/healthz")
 def healthz():
     """Health check probe endpoint for Azure App Service."""
-    connection_string, agent_id = get_config()
-    configured = bool(connection_string and agent_id)
+    project_endpoint, agent_name = get_config()
+    configured = bool(project_endpoint and agent_name)
     return jsonify({
         "status": "healthy" if configured else "unconfigured",
         "service": "azure-ai-agent-chatbot",
-        "connection_string_set": bool(connection_string),
-        "agent_id_set": bool(agent_id)
+        "project_endpoint_set": bool(project_endpoint),
+        "agent_name_set": bool(agent_name)
     }), 200 if configured else 503
 
 
@@ -83,12 +83,12 @@ def chat():
     All token acquisition, agent execution, and API calls are handled strictly on the backend.
     """
     # 1. Configuration Validation
-    connection_string, agent_id = get_config()
+    project_endpoint, agent_name = get_config()
     missing_vars = []
-    if not connection_string:
-        missing_vars.append("AZURE_AI_PROJECT_CONNECTION_STRING")
-    if not agent_id:
-        missing_vars.append("AZURE_AI_AGENT_ID")
+    if not project_endpoint:
+        missing_vars.append("FOUNDRY_PROJECT_ENDPOINT")
+    if not agent_name:
+        missing_vars.append("AGENT_NAME")
 
     if missing_vars:
         error_msg = f"Missing required environment variable(s): {', '.join(missing_vars)}."
@@ -96,7 +96,7 @@ def chat():
         return jsonify({
             "error": "ConfigurationError",
             "message": error_msg,
-            "details": "Ensure AZURE_AI_PROJECT_CONNECTION_STRING and AZURE_AI_AGENT_ID are configured in App Service Settings / environment variables."
+            "details": "Ensure FOUNDRY_PROJECT_ENDPOINT and AGENT_NAME are configured in App Service Settings / environment variables."
         }), 500
 
     # 2. Input Validation
@@ -112,7 +112,7 @@ def chat():
 
     try:
         # 3. Client Initialization (System-Assigned Managed Identity via DefaultAzureCredential)
-        client = get_ai_project_client(connection_string)
+        client = get_ai_project_client(project_endpoint)
 
         # 4. Thread Lifecycle Management
         if not thread_id:
@@ -129,10 +129,10 @@ def chat():
         )
 
         # 6. Execute Agent Run
-        logger.info(f"Triggering Agent run for thread '{thread_id}' with Agent ID '{agent_id}'...")
+        logger.info(f"Triggering Agent run for thread '{thread_id}' with Agent '{agent_name}'...")
         run = client.agents.create_run(
             thread_id=thread_id,
-            agent_id=agent_id
+            agent_id=agent_name
         )
 
         # 7. Poll Run Status with Timeout Protection
@@ -226,7 +226,7 @@ def chat():
             return jsonify({
                 "error": "NotFound",
                 "message": "HTTP 404: Azure AI Foundry Project, Agent, or Thread was not found.",
-                "details": "Check that AZURE_AI_AGENT_ID and connection string parameters match your Azure AI Foundry resource."
+                "details": "Check that AGENT_NAME and FOUNDRY_PROJECT_ENDPOINT match your Azure AI Foundry resource."
             }), 404
         else:
             return jsonify({
@@ -239,7 +239,7 @@ def chat():
         logger.error(f"Resource not found: {not_found_err}")
         return jsonify({
             "error": "ResourceNotFound",
-            "message": "The requested Agent ID or conversation Thread ID was not found.",
+            "message": "The requested Agent Name/ID or conversation Thread ID was not found.",
             "details": str(not_found_err)
         }), 404
 

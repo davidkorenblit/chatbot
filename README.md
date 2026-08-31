@@ -21,9 +21,8 @@ Grant the Web App's identity permission to use the AI Hub:
 
 ### 3. Application Settings (App Settings)
 Add these environment variables in your App Service's **Configuration** blade (or local `.env`):
-- `AZURE_AI_PROJECT_CONNECTION_STRING`: The connection string for your Azure AI Foundry Project.
-  - *Format:* `<region>.api.azure.com;subscriptionId=<sub-id>;resourceGroupName=<rg>;projectName=<project-name>`
-- `AZURE_AI_AGENT_ID`: The unique ID of your Azure AI Agent.
+- `FOUNDRY_PROJECT_ENDPOINT`: The Project Endpoint for your Azure AI Foundry Project.
+- `AGENT_NAME`: The unique ID or Name of your Azure AI Agent.
 
 ---
 
@@ -45,8 +44,8 @@ Add these environment variables in your App Service's **Configuration** blade (o
 
 3. Setup local environment variables by creating a `.env` file:
    ```ini
-   AZURE_AI_PROJECT_CONNECTION_STRING="your-connection-string"
-   AZURE_AI_AGENT_ID="your-agent-id"
+   FOUNDRY_PROJECT_ENDPOINT="https://<your-hub-or-project>.services.ai.azure.com/api/projects/<project-name>/..."
+   AGENT_NAME="your-agent-id"
    ```
    *Note:* `DefaultAzureCredential` will automatically pick up your signed-in credentials from Azure CLI (`az login`) or VS Code.
 
