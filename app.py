@@ -53,22 +53,31 @@ def get_config():
 
 
 
-def get_openai_assistants_client(project_endpoint: str):
+def get_openai_assistants_client(project_endpoint: str, agent_name: str = ""):
     """
-    Initializes or returns cached OpenAI Assistants client via AIProjectClient.get_openai_client().
-    In azure-ai-projects v2.x, the Assistants API is accessed through the OpenAI compatibility layer:
-        client.get_openai_client().beta.threads / .messages / .runs
+    Initializes or returns cached OpenAI client via AIProjectClient.get_openai_client().
+    Supports both project-level Assistants (threads/runs) and Agent endpoints (responses/chat).
     """
     global _project_client, _openai_client
     if _openai_client is None:
-        logger.info("Initializing AIProjectClient with Foundry Project Endpoint...")
+        logger.info("Initializing AIProjectClient with Foundry Project Endpoint (allow_preview=True)...")
         credential = DefaultAzureCredential()
         _project_client = AIProjectClient(
             endpoint=project_endpoint,
-            credential=credential
+            credential=credential,
+            allow_preview=True
         )
-        _openai_client = _project_client.get_openai_client()
-        logger.info("OpenAI Assistants client initialized successfully via AIProjectClient.get_openai_client().")
+        try:
+            if agent_name:
+                _openai_client = _project_client.get_openai_client(agent_name=agent_name)
+                logger.info(f"OpenAI client initialized for Agent '{agent_name}'.")
+            else:
+                _openai_client = _project_client.get_openai_client()
+                logger.info("OpenAI client initialized for Project endpoint.")
+        except Exception as e:
+            logger.warning(f"Falling back to project-level OpenAI client: {e}")
+            _openai_client = _project_client.get_openai_client()
+
     return _openai_client
 
 
@@ -95,9 +104,7 @@ def healthz():
 def chat():
     """
     Server-side chat endpoint proxying requests securely to Azure AI Foundry Agent.
-    All token acquisition, agent execution, and API calls are handled strictly on the backend.
-
-    SDK: azure-ai-projects v2.x — uses get_openai_client().beta.threads API.
+    Supports Responses API, Assistants Threads/Runs API, and Chat Completions API.
     """
     # 1. Configuration Validation
     project_endpoint, agent_name = get_config()
@@ -128,92 +135,108 @@ def chat():
         }), 400
 
     try:
-        # 3. Client Initialization (Managed Identity via DefaultAzureCredential)
-        openai_client = get_openai_assistants_client(project_endpoint)
+        # 3. Client Initialization
+        openai_client = get_openai_assistants_client(project_endpoint, agent_name)
 
-        # 4. Thread Lifecycle Management
-        #    API: openai_client.beta.threads.create()
-        if not thread_id:
-            logger.info("Creating new conversation thread on Azure AI Foundry...")
-            thread = openai_client.beta.threads.create()
-            thread_id = thread.id
-            logger.info(f"Thread created with ID: {thread_id}")
-
-        # 5. Append User Message
-        #    API: openai_client.beta.threads.messages.create(thread_id, role, content)
-        openai_client.beta.threads.messages.create(
-            thread_id=thread_id,
-            role="user",
-            content=user_message
-        )
-
-        # 6. Execute Agent Run
-        #    API: openai_client.beta.threads.runs.create(thread_id, assistant_id)
-        logger.info(f"Triggering Agent run for thread '{thread_id}' with Agent '{agent_name}'...")
-        run = openai_client.beta.threads.runs.create(
-            thread_id=thread_id,
-            assistant_id=agent_name
-        )
-
-        # 7. Poll Run Status with Timeout Protection
-        #    API: openai_client.beta.threads.runs.retrieve(run_id, thread_id)
-        poll_start = time.time()
-        timeout_seconds = 45
-
-        while run.status in ["queued", "in_progress", "requires_action"]:
-            if time.time() - poll_start > timeout_seconds:
-                logger.warning(f"Agent run '{run.id}' timed out after {timeout_seconds}s.")
-                return jsonify({
-                    "error": "TimeoutError",
-                    "message": "The Azure AI Agent response timed out. Please try again.",
-                    "thread_id": thread_id
-                }), 504
-
-            time.sleep(1)
-            run = openai_client.beta.threads.runs.retrieve(
-                run_id=run.id,
-                thread_id=thread_id
-            )
-
-        if run.status != "completed":
-            logger.error(f"Agent run failed with status: '{run.status}'. Run error details: {getattr(run, 'last_error', None)}")
-            return jsonify({
-                "error": "AgentExecutionError",
-                "message": f"Azure AI Agent run completed with non-success status: '{run.status}'.",
-                "details": str(getattr(run, "last_error", "Check Azure AI Studio logs for details.")),
-                "thread_id": thread_id
-            }), 502
-
-        # 8. Retrieve Messages & Parse Annotations/Citations
-        #    API: openai_client.beta.threads.messages.list(thread_id)
-        messages = openai_client.beta.threads.messages.list(thread_id=thread_id)
         assistant_reply = ""
         citations = []
 
-        for msg in messages.data:
-            if msg.role == "assistant":
-                for content_part in msg.content:
-                    if content_part.type == "text":
-                        assistant_reply = content_part.text.value
+        # 4. Strategy A: Try Responses API (Azure AI Foundry Agent Endpoint protocol)
+        if hasattr(openai_client, "responses") and callable(getattr(openai_client.responses, "create", None)):
+            try:
+                logger.info("Calling Azure AI Foundry Agent Responses API...")
+                kwargs = {"input": user_message}
+                if thread_id:
+                    kwargs["conversation"] = thread_id
+                
+                resp = openai_client.responses.create(**kwargs)
+                if hasattr(resp, "output_text") and resp.output_text:
+                    assistant_reply = resp.output_text
+                elif hasattr(resp, "output") and resp.output:
+                    assistant_reply = str(resp.output)
+                
+                thread_id = getattr(resp, "conversation", None) or getattr(resp, "id", thread_id)
+                logger.info("Responses API call succeeded.")
+            except Exception as resp_err:
+                logger.warning(f"Responses API call failed ({resp_err}), falling back to Assistants/Threads API...")
 
-                        # Extract citations from annotations
-                        if hasattr(content_part.text, "annotations") and content_part.text.annotations:
-                            for idx, annotation in enumerate(content_part.text.annotations):
-                                citation_info = {
-                                    "index": idx + 1,
-                                    "text": getattr(annotation, "text", f"[{idx+1}]"),
-                                    "type": getattr(annotation, "type", "citation"),
-                                }
+        # 5. Strategy B: Assistants API (Threads / Runs)
+        if not assistant_reply and hasattr(openai_client, "beta") and hasattr(openai_client.beta, "threads"):
+            if not thread_id:
+                logger.info("Creating new conversation thread on Azure AI Foundry...")
+                thread = openai_client.beta.threads.create()
+                thread_id = thread.id
 
-                                if hasattr(annotation, "file_citation") and annotation.file_citation:
-                                    citation_info["source"] = getattr(annotation.file_citation, "quote", "File reference")
-                                elif hasattr(annotation, "url_citation") and annotation.url_citation:
-                                    citation_info["source"] = getattr(annotation.url_citation, "url", "URL citation reference")
-                                else:
-                                    citation_info["source"] = "Azure AI Grounding Source"
+            openai_client.beta.threads.messages.create(
+                thread_id=thread_id,
+                role="user",
+                content=user_message
+            )
 
-                                citations.append(citation_info)
-                break  # Process latest assistant message
+            logger.info(f"Triggering Agent run for thread '{thread_id}' with Agent '{agent_name}'...")
+            run = openai_client.beta.threads.runs.create(
+                thread_id=thread_id,
+                assistant_id=agent_name
+            )
+
+            poll_start = time.time()
+            timeout_seconds = 45
+
+            while run.status in ["queued", "in_progress", "requires_action"]:
+                if time.time() - poll_start > timeout_seconds:
+                    logger.warning(f"Agent run '{run.id}' timed out after {timeout_seconds}s.")
+                    return jsonify({
+                        "error": "TimeoutError",
+                        "message": "The Azure AI Agent response timed out. Please try again.",
+                        "thread_id": thread_id
+                    }), 504
+
+                time.sleep(1)
+                run = openai_client.beta.threads.runs.retrieve(
+                    run_id=run.id,
+                    thread_id=thread_id
+                )
+
+            if run.status != "completed":
+                logger.error(f"Agent run failed with status: '{run.status}'. Run error details: {getattr(run, 'last_error', None)}")
+                return jsonify({
+                    "error": "AgentExecutionError",
+                    "message": f"Azure AI Agent run completed with non-success status: '{run.status}'.",
+                    "details": str(getattr(run, "last_error", "Check Azure AI Studio logs for details.")),
+                    "thread_id": thread_id
+                }), 502
+
+            messages = openai_client.beta.threads.messages.list(thread_id=thread_id)
+            for msg in messages.data:
+                if msg.role == "assistant":
+                    for content_part in msg.content:
+                        if content_part.type == "text":
+                            assistant_reply = content_part.text.value
+                            if hasattr(content_part.text, "annotations") and content_part.text.annotations:
+                                for idx, annotation in enumerate(content_part.text.annotations):
+                                    citation_info = {
+                                        "index": idx + 1,
+                                        "text": getattr(annotation, "text", f"[{idx+1}]"),
+                                        "type": getattr(annotation, "type", "citation"),
+                                    }
+                                    if hasattr(annotation, "file_citation") and annotation.file_citation:
+                                        citation_info["source"] = getattr(annotation.file_citation, "quote", "File reference")
+                                    elif hasattr(annotation, "url_citation") and annotation.url_citation:
+                                        citation_info["source"] = getattr(annotation.url_citation, "url", "URL citation reference")
+                                    else:
+                                        citation_info["source"] = "Azure AI Grounding Source"
+                                    citations.append(citation_info)
+                    break
+
+        # 6. Strategy C: Chat Completions API fallback
+        if not assistant_reply and hasattr(openai_client, "chat") and hasattr(openai_client.chat, "completions"):
+            logger.info("Calling Chat Completions API fallback...")
+            chat_resp = openai_client.chat.completions.create(
+                model=agent_name,
+                messages=[{"role": "user", "content": user_message}]
+            )
+            if chat_resp.choices:
+                assistant_reply = chat_resp.choices[0].message.content or ""
 
         return jsonify({
             "reply": assistant_reply,
@@ -221,6 +244,7 @@ def chat():
             "thread_id": thread_id,
             "sender": "bot"
         }), 200
+
 
     # 9. Standard Error Handling for Authentication & Authorization Failures
     except ClientAuthenticationError as auth_err:
