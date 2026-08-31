@@ -1,372 +1,1064 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Azure Cloud Chatbot</title>
+    <title>Enterprise AI Assistant | Editorial Minimalist</title>
+    
+    <!-- Google Fonts: Assistant & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
     <style>
+        /* CSS Variables - Editorial Minimalist ("Paper & Ink") Design Tokens */
         :root {
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
-            --card-bg: rgba(30, 41, 59, 0.7);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --azure-blue: #0078d4;
-            --azure-glow: rgba(0, 120, 212, 0.35);
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --user-bubble: #0078d4;
-            --bot-bubble: rgba(51, 65, 85, 0.85);
+            /* Light Theme (Default fallback) */
+            --bg-page: #F9FAFB;
+            --surface-card: #FFFFFF;
+            --surface-subtle: #F3F4F6;
+            --border-color: #E5E7EB;
+            --border-hover: #D1D5DB;
+            --text-primary: #111827;
+            --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF;
+            
+            --accent-ink: #0F172A;
+            --accent-contrast: #FFFFFF;
+            --accent-subtle: #EEF2F6;
+            --bot-bubble-bg: #F3F4F6;
+            --bot-bubble-border: #E5E7EB;
+            --user-bubble-bg: #111827;
+            --user-bubble-text: #F9FAFB;
+            --citation-bg: #F8FAFC;
+            --badge-bg: #F3F4F6;
+            --badge-border: #E5E7EB;
+            --badge-text: #4B5563;
+            
+            --status-online: #10B981;
+            --code-bg: #F3F4F6;
+            --code-border: #E5E7EB;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme (Charcoal & Ink) */
+            --bg-page: #09090B;
+            --surface-card: #121215;
+            --surface-subtle: #18181B;
+            --border-color: #27272A;
+            --border-hover: #3F3F46;
+            --text-primary: #F4F4F5;
+            --text-secondary: #A1A1AA;
+            --text-tertiary: #71717A;
+            
+            --accent-ink: #FAFAFA;
+            --accent-contrast: #09090B;
+            --accent-subtle: #1E1E24;
+            --bot-bubble-bg: #141418;
+            --bot-bubble-border: #27272A;
+            --user-bubble-bg: #27272A;
+            --user-bubble-text: #FAFAFA;
+            --citation-bg: #111114;
+            --badge-bg: #18181B;
+            --badge-border: #27272A;
+            --badge-text: #A1A1AA;
+            
+            --status-online: #10B981;
+            --code-bg: #18181B;
+            --code-border: #27272A;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
-            background: var(--bg-gradient);
+            font-family: 'Assistant', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-page);
             color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 24px 16px;
+            transition: background-color 0.25s ease, color 0.25s ease;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
         }
 
-        .chat-container {
+        /* Mono Elements Typography */
+        .font-mono,
+        .eyebrow,
+        .mono-tag,
+        .citation-badge,
+        .time-badge,
+        .theme-toggle-btn,
+        .status-badge,
+        .code-snippet,
+        .prompt-card-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Layout Container: max-w-5xl */
+        .app-container {
             width: 100%;
-            max-width: 750px;
-            height: 85vh;
-            max-height: 800px;
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--card-border);
-            border-radius: 20px;
+            max-width: 1024px; /* max-w-5xl */
+            height: 90vh;
+            max-height: 920px;
+            background-color: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px; /* rounded-md */
             display: flex;
             flex-direction: column;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 30px var(--azure-glow);
             overflow: hidden;
+            box-shadow: none; /* Editorial Flat */
+            transition: border-color 0.25s ease, background-color 0.25s ease;
         }
 
-        .chat-header {
-            padding: 20px 24px;
-            background: rgba(15, 23, 42, 0.8);
-            border-bottom: 1px solid var(--card-border);
+        /* App Header */
+        .app-header {
+            padding: 16px 24px;
+            background-color: var(--surface-card);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .header-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .eyebrow {
+            font-size: 0.75rem; /* 12px */
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-title-group h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background-color: var(--badge-bg);
+            border: 1px solid var(--badge-border);
+            color: var(--badge-text);
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: var(--status-online);
+        }
+
+        .action-btn {
+            background-color: var(--surface-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 4px; /* rounded-md */
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .action-btn:hover {
+            border-color: var(--border-hover);
+            background-color: var(--surface-subtle);
+        }
+
+        /* Main Body Area (Scrollable) */
+        .chat-content-area {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            scroll-behavior: smooth;
+            background-color: var(--surface-card);
+        }
+
+        .chat-content-area::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .chat-content-area::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        /* Welcome Screen Section */
+        .welcome-screen {
+            padding: 40px 32px 32px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 840px;
+            margin: auto auto;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .welcome-badge-group {
+            margin-bottom: 16px;
+        }
+
+        .welcome-title {
+            font-size: 1.85rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+
+        .welcome-desc {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 680px;
+            margin-bottom: 32px;
+        }
+
+        /* Capabilities Bar */
+        .capabilities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            width: 100%;
+            margin-bottom: 32px;
+            text-align: right;
+        }
+
+        .capability-card {
+            background-color: var(--surface-subtle);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .capability-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .capability-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Starter Prompt Cards Section */
+        .starter-section-title {
+            width: 100%;
+            text-align: right;
+            margin-bottom: 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
-        .header-info {
-            display: flex;
-            align-items: center;
-            gap: 14px;
+        .starter-prompts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            width: 100%;
         }
 
-        .azure-badge {
-            width: 42px;
-            height: 42px;
-            background: linear-gradient(135deg, #0078d4, #00bcf2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            box-shadow: 0 4px 12px var(--azure-glow);
-        }
-
-        .header-title h1 {
-            font-size: 1.15rem;
-            font-weight: 600;
-        }
-
-        .header-title p {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background-color: #22c55e;
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: 0 0 8px #22c55e;
-        }
-
-        .chat-messages {
-            flex: 1;
-            padding: 24px;
-            overflow-y: auto;
+        .prompt-card {
+            background-color: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 14px 16px;
+            text-align: right;
+            cursor: pointer;
+            transition: all 0.15s ease;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            scroll-behavior: smooth;
+            justify-content: space-between;
+            gap: 10px;
         }
 
-        .chat-messages::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .chat-messages::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 4px;
-        }
-
-        .message {
-            max-width: 80%;
-            padding: 14px 18px;
-            border-radius: 16px;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            animation: fadeIn 0.3s ease-out;
-            word-wrap: break-word;
-        }
-
-        .message.bot {
-            align-self: flex-start;
-            background: var(--bot-bubble);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-bottom-left-radius: 4px;
-        }
-
-        .message.user {
-            align-self: flex-end;
-            background: var(--user-bubble);
-            color: #ffffff;
-            border-bottom-right-radius: 4px;
-            box-shadow: 0 4px 12px var(--azure-glow);
-        }
-
-        .chat-input-area {
-            padding: 18px 24px;
-            background: rgba(15, 23, 42, 0.8);
-            border-top: 1px solid var(--card-border);
-        }
-
-        .input-form {
-            display: flex;
-            gap: 12px;
-        }
-
-        .input-form input {
-            flex: 1;
-            background: rgba(30, 41, 59, 0.9);
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
-            padding: 12px 18px;
-            color: var(--text-primary);
-            font-size: 0.95rem;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .input-form input:focus {
-            border-color: var(--azure-blue);
-            box-shadow: 0 0 0 3px var(--azure-glow);
-        }
-
-        .input-form button {
-            background: linear-gradient(135deg, #0078d4, #005a9e);
-            border: none;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-size: 0.95rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: transform 0.15s, opacity 0.15s;
-        }
-
-        .input-form button:hover {
-            opacity: 0.92;
+        .prompt-card:hover {
+            border-color: var(--border-hover);
+            background-color: var(--surface-subtle);
             transform: translateY(-1px);
         }
 
-        .input-form button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
+        .prompt-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-tertiary);
         }
 
-        .citations-container {
-            margin-top: 12px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 0.8rem;
+        .prompt-card-number {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .prompt-card-tag {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .prompt-card-text {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        /* Active Chat Messages Stream */
+        .messages-list {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .message-row {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            animation: fadeIn 0.25s ease-out;
+        }
+
+        .message-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .message-row.user .message-meta {
+            align-self: flex-start;
+            flex-direction: row-reverse;
+        }
+
+        .message-row.bot .message-meta {
+            align-self: flex-start;
+        }
+
+        .message-bubble {
+            padding: 14px 18px;
+            border-radius: 6px; /* rounded-md */
+            font-size: 0.98rem;
+            line-height: 1.6;
+            max-width: 88%;
+            word-break: break-word;
+            border: 1px solid var(--border-color);
+        }
+
+        .message-row.user .message-bubble {
+            align-self: flex-start;
+            background-color: var(--user-bubble-bg);
+            color: var(--user-bubble-text);
+            border-color: var(--user-bubble-bg);
+        }
+
+        .message-row.bot .message-bubble {
+            align-self: flex-start;
+            background-color: var(--bot-bubble-bg);
+            color: var(--text-primary);
+            border-color: var(--bot-bubble-border);
+        }
+
+        /* Message Formatting */
+        .message-bubble p {
+            margin-bottom: 8px;
+        }
+        .message-bubble p:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-bubble pre {
+            background-color: var(--code-bg);
+            border: 1px solid var(--code-border);
+            padding: 10px 14px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            margin: 8px 0;
+            font-family: 'JetBrains Mono', monospace;
+            direction: ltr;
+            text-align: left;
+        }
+
+        .message-bubble code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            padding: 2px 5px;
+            background-color: var(--code-bg);
+            border-radius: 3px;
+            direction: ltr;
+            display: inline-block;
+        }
+
+        /* Citations & References Component */
+        .citations-panel {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+            width: 100%;
         }
 
         .citations-header {
-            font-weight: 600;
-            color: #38bdf8;
-            margin-bottom: 6px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
         }
 
-        .citation-list {
+        .citations-table {
             display: flex;
             flex-direction: column;
             gap: 6px;
         }
 
-        .citation-card {
-            background: rgba(15, 23, 42, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
+        .citation-item {
+            background-color: var(--citation-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
             padding: 8px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            transition: border-color 0.15s ease;
         }
 
-        .citation-card-title {
-            font-weight: 500;
-            color: #f1f5f9;
-            margin-bottom: 2px;
+        .citation-item:hover {
+            border-color: var(--border-hover);
         }
 
-        .citation-card-source {
+        .citation-top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .citation-idx {
+            font-size: 0.7rem;
+            font-weight: 600;
             color: var(--text-secondary);
+        }
+
+        .citation-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .citation-source {
             font-size: 0.75rem;
+            color: var(--text-secondary);
             line-height: 1.4;
         }
 
+        /* Typing Loader */
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 10px 14px;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--text-secondary);
+            animation: pulseDot 1.2s infinite ease-in-out;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        /* Input Area Footer */
+        .app-footer {
+            padding: 16px 24px;
+            background-color: var(--surface-card);
+            border-top: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .input-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 8px 6px 14px;
+            transition: border-color 0.15s ease;
+        }
+
+        .input-bar:focus-within {
+            border-color: var(--text-primary);
+        }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+            padding: 6px 0;
+            resize: none;
+            height: 28px;
+            max-height: 120px;
+            line-height: 1.4;
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .send-button {
+            background-color: var(--accent-ink);
+            color: var(--accent-contrast);
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .send-button:hover:not(:disabled) {
+            opacity: 0.88;
+        }
+
+        .send-button:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .input-hint-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 6px;
+            padding: 0 4px;
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
+        }
+
+        /* Animations */
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
+            from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulseDot {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+            40% { opacity: 1; transform: scale(1.1); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 8px;
+            }
+            .app-container {
+                height: 98vh;
+                border-radius: 4px;
+            }
+            .app-header {
+                padding: 12px 16px;
+            }
+            .welcome-screen {
+                padding: 24px 16px;
+            }
+            .welcome-title {
+                font-size: 1.45rem;
+            }
+            .starter-prompts-grid {
+                grid-template-columns: 1fr;
+            }
+            .capabilities-grid {
+                grid-template-columns: 1fr;
+            }
+            .message-bubble {
+                max-width: 95%;
+            }
+            .app-footer {
+                padding: 12px 14px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="chat-container">
-        <header class="chat-header">
-            <div class="header-info">
-                <div class="azure-badge">☁️</div>
-                <div class="header-title">
-                    <h1>Azure AI Agent Chatbot</h1>
-                    <p><span class="status-dot"></span> App Service Secured</p>
-                </div>
+
+    <div class="app-container">
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="header-title-group">
+                <span class="eyebrow">
+                    <span>SYS // AZURE AI AGENT</span>
+                    <span>&bull;</span>
+                    <span class="font-mono">v1.0.4</span>
+                </span>
+                <h1>עוזר חכם &bull; Enterprise AI Assistant</h1>
+            </div>
+            <div class="header-actions">
+                <span class="status-pill font-mono">
+                    <span class="status-dot"></span>
+                    <span>SECURED (MSI)</span>
+                </span>
+                <button type="button" class="action-btn font-mono" id="themeToggleBtn" title="החלף ערכת נושא">
+                    <span id="themeIcon">☀️</span>
+                    <span id="themeLabel">LIGHT</span>
+                </button>
+                <button type="button" class="action-btn font-mono" id="newChatBtn" title="שיחה חדשה">
+                    <span>↺</span>
+                    <span>RESET</span>
+                </button>
             </div>
         </header>
 
-        <main class="chat-messages" id="chatMessages">
-            <div class="message bot">
-                👋 Hello! Welcome to your secure Enterprise Assistant. I am connected directly to your Azure AI Foundry Agent using System-Assigned Managed Identity. How can I help you today?
-            </div>
+        <!-- Main Content Area -->
+        <main class="chat-content-area" id="chatContentArea">
+            <!-- Welcome Screen (Shown initially when no conversation has started) -->
+            <section class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-badge-group">
+                    <span class="status-pill font-mono">
+                        <span>WORKSPACE // KNOWLEDGE SYSTEM</span>
+                    </span>
+                </div>
+                <h2 class="welcome-title">שלום, כיצד אוכל לסייע לך היום?</h2>
+                <p class="welcome-desc">
+                    אני העוזר הדיגיטלי המחובר ישירות לסוכן Azure AI Foundry. תפקידי לספק מענה מדויק, מבוסס מקורות ומסמכים, ניתוח פרויקטים ומידע אקדמי ומקצועי.
+                </p>
+
+                <!-- Core Capabilities Showcase -->
+                <div class="capabilities-grid">
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <span>🎓</span>
+                            <span>רקע אקדמי ומוסד לימודים</span>
+                        </div>
+                        <p class="capability-desc">סקירת תוכניות לימוד, התמחויות, קורסים ומחקרים רלוונטיים.</p>
+                    </div>
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <span>🚀</span>
+                            <span>ניתוח פרויקטים ומערכות</span>
+                        </div>
+                        <p class="capability-desc">הסבר מעמיק על ארכיטקטורת פרויקטים, טכנולוגיות וקוד.</p>
+                    </div>
+                    <div class="capability-card">
+                        <div class="capability-header">
+                            <span>🔍</span>
+                            <span>מענה מבוסס מקורות (RAG)</span>
+                        </div>
+                        <p class="capability-desc">אימות נתונים והצגת סימוכין ומראי מקום מדויקים לכל תשובה.</p>
+                    </div>
+                </div>
+
+                <!-- Starter Prompt Cards -->
+                <div class="starter-section-title">
+                    <span class="eyebrow">שאלות מומלצות לפתיחה</span>
+                    <span class="font-mono text-tertiary" style="font-size: 0.75rem;">[SELECT PROMPT]</span>
+                </div>
+
+                <div class="starter-prompts-grid">
+                    <div class="prompt-card" data-prompt="ספר לי על מוסד הלימודים, הרקע האקדמי ותחומי ההתמחות">
+                        <div class="prompt-card-top">
+                            <span class="prompt-card-number">01</span>
+                            <span class="prompt-card-tag font-mono">ACADEMIA</span>
+                        </div>
+                        <div class="prompt-card-text">
+                            ספר לי על מוסד הלימודים, הרקע האקדמי ותחומי ההתמחות
+                        </div>
+                    </div>
+
+                    <div class="prompt-card" data-prompt="הצג סקירה של פרויקט נבחר: המטרות, הטכנולוגיות והתוצאות">
+                        <div class="prompt-card-top">
+                            <span class="prompt-card-number">02</span>
+                            <span class="prompt-card-tag font-mono">PROJECTS</span>
+                        </div>
+                        <div class="prompt-card-text">
+                            הצג סקירה של פרויקט נבחר: המטרות, הטכנולוגיות והתוצאות
+                        </div>
+                    </div>
+
+                    <div class="prompt-card" data-prompt="אילו יכולות וטכנולוגיות עיקריות עומדות לרשותך כסוכן AI?">
+                        <div class="prompt-card-top">
+                            <span class="prompt-card-number">03</span>
+                            <span class="prompt-card-tag font-mono">CAPABILITIES</span>
+                        </div>
+                        <div class="prompt-card-text">
+                            אילו יכולות וטכנולוגיות עיקריות עומדות לרשותך כסוכן AI?
+                        </div>
+                    </div>
+
+                    <div class="prompt-card" data-prompt="הסבר על הארכיטקטורה בענן וחיבור ה-Azure AI Foundry">
+                        <div class="prompt-card-top">
+                            <span class="prompt-card-number">04</span>
+                            <span class="prompt-card-tag font-mono">INFRASTRUCTURE</span>
+                        </div>
+                        <div class="prompt-card-text">
+                            הסבר על הארכיטקטורה בענן וחיבור ה-Azure AI Foundry
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chat Messages Container (Hidden initially until first message) -->
+            <div class="messages-list" id="messagesList" style="display: none;"></div>
         </main>
 
-        <footer class="chat-input-area">
-            <form class="input-form" id="chatForm">
-                <input type="text" id="userInput" placeholder="Type a message..." autocomplete="off" required />
-                <button type="submit" id="sendBtn">Send</button>
+        <!-- Input Footer -->
+        <footer class="app-footer">
+            <form id="chatForm">
+                <div class="input-bar">
+                    <input 
+                        type="text" 
+                        id="userInput" 
+                        class="chat-input" 
+                        placeholder="הקלד/י שאלה או הודעה... (לחץ Enter לשליחה)" 
+                        autocomplete="off" 
+                        required 
+                    />
+                    <button type="submit" id="sendBtn" class="send-button">
+                        <span>שליחה</span>
+                        <span>&larr;</span>
+                    </button>
+                </div>
+                <div class="input-hint-row font-mono">
+                    <span>STATUS: READY</span>
+                    <span>ENTER TO SUBMIT</span>
+                </div>
             </form>
         </footer>
     </div>
 
+    <!-- Script Logic -->
     <script>
-        const chatMessages = document.getElementById('chatMessages');
+        // DOM Elements
+        const chatContentArea = document.getElementById('chatContentArea');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const messagesList = document.getElementById('messagesList');
         const chatForm = document.getElementById('chatForm');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeLabel = document.getElementById('themeLabel');
+        const newChatBtn = document.getElementById('newChatBtn');
 
-        let activeThreadId = ""; // Retains session state across messages
+        let activeThreadId = "";
+        let isGenerating = false;
 
-        function appendMessage(text, sender, citations = []) {
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', sender);
-            
-            // Text part
-            const textSpan = document.createElement('span');
-            textSpan.style.whiteSpace = 'pre-wrap';
-            textSpan.textContent = text;
-            msgDiv.appendChild(textSpan);
-
-            // Citations part (only for bot responses with citations)
-            if (sender === 'bot' && citations && citations.length > 0) {
-                const citeContainer = document.createElement('div');
-                citeContainer.classList.add('citations-container');
-
-                const header = document.createElement('div');
-                header.classList.add('citations-header');
-                header.innerHTML = '🔍 References & Citations';
-                citeContainer.appendChild(header);
-
-                const list = document.createElement('div');
-                list.classList.add('citation-list');
-
-                citations.forEach(cite => {
-                    const card = document.createElement('div');
-                    card.classList.add('citation-card');
-
-                    const title = document.createElement('div');
-                    title.classList.add('citation-card-title');
-                    title.textContent = `[${cite.index}] ${cite.text || 'Document Reference'}`;
-                    card.appendChild(title);
-
-                    const src = document.createElement('div');
-                    src.classList.add('citation-card-source');
-                    src.textContent = cite.source || 'Azure AI internal search query result.';
-                    card.appendChild(src);
-
-                    list.appendChild(card);
-                });
-
-                citeContainer.appendChild(list);
-                msgDiv.appendChild(citeContainer);
-            }
-
-            chatMessages.appendChild(msgDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+        // --- 1. Theme Management (Light / Dark Mode) ---
+        function initTheme() {
+            const savedTheme = localStorage.getItem('app-theme') || 'dark';
+            applyTheme(savedTheme);
         }
 
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const text = userInput.value.trim();
-            if (!text) return;
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('app-theme', theme);
+            if (theme === 'dark') {
+                themeIcon.textContent = '☀️';
+                themeLabel.textContent = 'LIGHT';
+            } else {
+                themeIcon.textContent = '🌙';
+                themeLabel.textContent = 'DARK';
+            }
+        }
 
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+        });
+
+        // --- 2. New Chat / Reset ---
+        newChatBtn.addEventListener('click', () => {
+            activeThreadId = "";
+            messagesList.innerHTML = "";
+            messagesList.style.display = "none";
+            welcomeScreen.style.display = "flex";
+            userInput.value = "";
+            userInput.focus();
+        });
+
+        // --- 3. Starter Prompt Cards Click Handler ---
+        document.querySelectorAll('.prompt-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const promptText = card.getAttribute('data-prompt');
+                if (promptText && !isGenerating) {
+                    userInput.value = promptText;
+                    submitMessage(promptText);
+                }
+            });
+        });
+
+        // Format Current Time (HH:MM) in Tabular Mono
+        function getFormattedTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const mins = String(now.getMinutes()).padStart(2, '0');
+            return `${hours}:${mins}`;
+        }
+
+        // --- 4. Append Message to Stream ---
+        function appendMessage(text, sender, citations = []) {
+            // Ensure Welcome Screen is hidden and Messages List is shown
+            welcomeScreen.style.display = 'none';
+            messagesList.style.display = 'flex';
+
+            const row = document.createElement('div');
+            row.classList.add('message-row', sender);
+
+            // Metadata row (Timestamp & Sender Label)
+            const meta = document.createElement('div');
+            meta.classList.add('message-meta', 'font-mono');
+            const senderName = sender === 'user' ? 'YOU' : 'ASSISTANT // AZURE-AGENT';
+            meta.innerHTML = `<span>${senderName}</span><span>&bull;</span><span class="time-badge">${getFormattedTime()}</span>`;
+            row.appendChild(meta);
+
+            // Bubble
+            const bubble = document.createElement('div');
+            bubble.classList.add('message-bubble');
+
+            // Format simple markdown / paragraphs
+            const formattedContent = formatMessageText(text);
+            bubble.innerHTML = formattedContent;
+
+            // Citations / References if available
+            if (sender === 'bot' && citations && citations.length > 0) {
+                const citePanel = document.createElement('div');
+                citePanel.classList.add('citations-panel');
+
+                const header = document.createElement('div');
+                header.classList.add('citations-header', 'font-mono');
+                header.innerHTML = `<span>📚</span><span>מקורות וסימוכין (${citations.length})</span>`;
+                citePanel.appendChild(header);
+
+                const table = document.createElement('div');
+                table.classList.add('citations-table');
+
+                citations.forEach((cite, idx) => {
+                    const item = document.createElement('div');
+                    item.classList.add('citation-item');
+
+                    const topRow = document.createElement('div');
+                    topRow.classList.add('citation-top-row');
+
+                    const title = document.createElement('span');
+                    title.classList.add('citation-title');
+                    title.textContent = cite.text ? `${cite.text}` : `מקור [${idx + 1}]`;
+
+                    const badge = document.createElement('span');
+                    badge.classList.add('citation-idx', 'font-mono');
+                    badge.textContent = `REF_${String(idx + 1).padStart(2, '0')}`;
+
+                    topRow.appendChild(title);
+                    topRow.appendChild(badge);
+                    item.appendChild(topRow);
+
+                    if (cite.source) {
+                        const source = document.createElement('div');
+                        source.classList.add('citation-source');
+                        source.textContent = cite.source;
+                        item.appendChild(source);
+                    }
+
+                    table.appendChild(item);
+                });
+
+                citePanel.appendChild(table);
+                bubble.appendChild(citePanel);
+            }
+
+            row.appendChild(bubble);
+            messagesList.appendChild(row);
+            chatContentArea.scrollTop = chatContentArea.scrollHeight;
+        }
+
+        // Show typing indicator
+        function showTypingIndicator() {
+            const row = document.createElement('div');
+            row.classList.add('message-row', 'bot');
+            row.id = 'loadingIndicatorRow';
+
+            const meta = document.createElement('div');
+            meta.classList.add('message-meta', 'font-mono');
+            meta.innerHTML = `<span>ASSISTANT // PROCESSING</span><span>&bull;</span><span class="time-badge">${getFormattedTime()}</span>`;
+            row.appendChild(meta);
+
+            const bubble = document.createElement('div');
+            bubble.classList.add('message-bubble');
+            bubble.innerHTML = `
+                <div class="typing-indicator">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                </div>
+            `;
+            row.appendChild(bubble);
+            messagesList.appendChild(row);
+            chatContentArea.scrollTop = chatContentArea.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const loadingRow = document.getElementById('loadingIndicatorRow');
+            if (loadingRow) {
+                loadingRow.remove();
+            }
+        }
+
+        // Clean formatting helper for code blocks, bold text, lists
+        function formatMessageText(raw) {
+            if (!raw) return "";
+            
+            // Escape basic HTML
+            let safe = raw
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+
+            // Format markdown code blocks ```code```
+            safe = safe.replace(/```([\s\S]*?)```/g, (match, p1) => {
+                return `<pre><code>${p1.trim()}</code></pre>`;
+            });
+
+            // Format inline code `code`
+            safe = safe.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Format bold text **text**
+            safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+            // Line breaks
+            safe = safe.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>');
+
+            return `<p>${safe}</p>`;
+        }
+
+        // --- 5. Message Submission Handler ---
+        async function submitMessage(messageText) {
+            const text = messageText.trim();
+            if (!text || isGenerating) return;
+
+            isGenerating = true;
             appendMessage(text, 'user');
             userInput.value = '';
             userInput.disabled = true;
             sendBtn.disabled = true;
 
+            showTypingIndicator();
+
             try {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         message: text,
                         thread_id: activeThreadId
                     })
                 });
-                
+
                 const data = await res.json();
-                
-                // Track active thread id for subsequent requests
+                removeTypingIndicator();
+
                 if (data.thread_id) {
                     activeThreadId = data.thread_id;
                 }
 
-                if (data.reply) {
+                if (res.ok && data.reply) {
                     appendMessage(data.reply, 'bot', data.citations);
                 } else {
-                    appendMessage("Error: Could not retrieve response from server.", 'bot');
+                    const errorHeader = data.message || data.error || "לא התקבלה תשובה מהשרת.";
+                    const errorDetail = data.details ? `\n\n📌 פרטים: ${data.details}` : "";
+                    appendMessage(`⚠️ ${errorHeader}${errorDetail}`, 'bot');
                 }
             } catch (err) {
-                appendMessage("Connection error. Please try again.", 'bot');
+                removeTypingIndicator();
+                appendMessage("⚠️ שגיאת תקשורת עם השרת. אנא נסה/י שוב מאוחר יותר.", 'bot');
             } finally {
+                isGenerating = false;
                 userInput.disabled = false;
                 sendBtn.disabled = false;
                 userInput.focus();
             }
+        }
+
+        // Form Submit listener
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = userInput.value;
+            submitMessage(text);
+        });
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            userInput.focus();
         });
     </script>
 </body>
