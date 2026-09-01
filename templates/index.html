@@ -289,69 +289,6 @@
             line-height: 1.4;
         }
 
-        /* Starter Prompt Cards Section */
-        .starter-section-title {
-            width: 100%;
-            text-align: right;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .starter-prompts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 12px;
-            width: 100%;
-        }
-
-        .prompt-card {
-            background-color: var(--surface-card);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 14px 16px;
-            text-align: right;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 10px;
-        }
-
-        .prompt-card:hover {
-            border-color: var(--border-hover);
-            background-color: var(--surface-subtle);
-            transform: translateY(-1px);
-        }
-
-        .prompt-card-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: var(--text-tertiary);
-        }
-
-        .prompt-card-number {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-        }
-
-        .prompt-card-tag {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-secondary);
-        }
-
-        .prompt-card-text {
-            font-size: 0.92rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            line-height: 1.4;
-        }
-
         /* Active Chat Messages Stream */
         .messages-list {
             padding: 24px;
@@ -798,17 +735,6 @@
             welcomeScreen.style.display = "flex";
             userInput.value = "";
             userInput.focus();
-        });
-
-        // --- 3. Starter Prompt Cards Click Handler ---
-        document.querySelectorAll('.prompt-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const promptText = card.getAttribute('data-prompt');
-                if (promptText && !isGenerating) {
-                    userInput.value = promptText;
-                    submitMessage(promptText);
-                }
-            });
         });
 
         // Format Current Time (HH:MM) in Tabular Mono
