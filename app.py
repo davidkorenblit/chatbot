@@ -4,7 +4,7 @@ import time
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
-# Azure AI Agents & Identity SDKs
+# Azure AI Foundry Projects & Identity SDKs
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import (
     ClientAuthenticationError,
@@ -12,7 +12,7 @@ from azure.core.exceptions import (
     ResourceNotFoundError,
     ServiceRequestError,
 )
-from azure.ai.agents import AgentsClient
+from azure.ai.projects import AIProjectClient
 
 # Configure structured logging
 logging.basicConfig(
@@ -27,7 +27,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # Global client cache
-_agents_client = None
+_project_client = None
 
 
 def get_config():
@@ -40,24 +40,25 @@ def get_config():
     return project_endpoint, agent_name, agent_id
 
 
-def get_agents_client(project_endpoint: str):
+def get_project_client(project_endpoint: str):
     """
-    Initializes or returns cached AgentsClient from azure.ai.agents.
+    Initializes or returns cached AIProjectClient from azure.ai.projects.
     """
-    global _agents_client
-    if _agents_client is None:
-        logger.info(f"Initializing AgentsClient with endpoint: {project_endpoint}...")
+    global _project_client
+    if _project_client is None:
+        logger.info(f"Initializing AIProjectClient with endpoint: {project_endpoint}...")
         credential = DefaultAzureCredential()
-        _agents_client = AgentsClient(
+        _project_client = AIProjectClient(
             endpoint=project_endpoint,
             credential=credential
         )
-        logger.info("AgentsClient initialized successfully.")
-    return _agents_client
+        logger.info("AIProjectClient initialized successfully.")
+    return _project_client
 
 
-# Alias for backward compatibility
-get_openai_client = get_agents_client
+# Backward-compatibility aliases
+get_agents_client = get_project_client
+get_openai_client = get_project_client
 
 
 @app.route("/")
@@ -87,7 +88,7 @@ def chat():
     """
     project_endpoint, agent_name, agent_id = get_config()
 
-    # Resolve the assistant identifier: prefer AZURE_AI_AGENT_ID (GUID), fall back to AGENT_NAME
+    # Resolve the assistant identifier: prefer AZURE_AI_AGENT_ID (name/id), fall back to AGENT_NAME
     assistant_identifier = agent_id or agent_name
 
     missing_vars = []
@@ -116,17 +117,17 @@ def chat():
         }), 400
 
     try:
-        agents_client = get_agents_client(project_endpoint)
+        project_client = get_project_client(project_endpoint)
 
         # 1. Thread creation if new conversation
         if not thread_id:
             logger.info("Creating new thread on Azure AI Foundry...")
-            thread = agents_client.threads.create()
+            thread = project_client.agents.create_thread()
             thread_id = thread.id
             logger.info(f"Thread created: {thread_id}")
 
         # 2. Append message
-        agents_client.messages.create(
+        project_client.agents.create_message(
             thread_id=thread_id,
             role="user",
             content=user_message
@@ -134,9 +135,9 @@ def chat():
 
         # 3. Create run
         logger.info(f"Creating run for agent '{assistant_identifier}' on thread '{thread_id}'...")
-        run = agents_client.runs.create(
+        run = project_client.agents.create_run(
             thread_id=thread_id,
-            agent_id=assistant_identifier
+            assistant_id=assistant_identifier
         )
 
         # 4. Poll status
@@ -153,7 +154,7 @@ def chat():
                 }), 504
 
             time.sleep(1)
-            run = agents_client.runs.get(
+            run = project_client.agents.get_run(
                 thread_id=thread_id,
                 run_id=run.id
             )
@@ -168,7 +169,7 @@ def chat():
             }), 502
 
         # 5. Extract assistant message
-        messages = agents_client.messages.list(thread_id=thread_id)
+        messages = project_client.agents.list_messages(thread_id=thread_id)
         assistant_reply = ""
         citations = []
         msg_list = getattr(messages, "data", messages)
