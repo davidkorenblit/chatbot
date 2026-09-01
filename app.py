@@ -38,7 +38,8 @@ def get_config():
     """
     project_endpoint = os.getenv("FOUNDRY_PROJECT_ENDPOINT", "").strip()
     agent_name = os.getenv("AGENT_NAME", "").strip()
-    return project_endpoint, agent_name
+    agent_id = os.getenv("AZURE_AI_AGENT_ID", "").strip()
+    return project_endpoint, agent_name, agent_id
 
 
 def get_openai_client(project_endpoint: str):
@@ -67,13 +68,14 @@ def home():
 @app.route("/healthz")
 def healthz():
     """Health check probe endpoint for Azure App Service."""
-    project_endpoint, agent_name = get_config()
-    configured = bool(project_endpoint and agent_name)
+    project_endpoint, agent_name, agent_id = get_config()
+    assistant_identifier = agent_id or agent_name
+    configured = bool(project_endpoint and assistant_identifier)
     return jsonify({
         "status": "healthy" if configured else "unconfigured",
         "service": "azure-ai-agent-chatbot",
         "project_endpoint_set": bool(project_endpoint),
-        "agent_name_set": bool(agent_name)
+        "agent_identifier_set": bool(assistant_identifier)
     }), 200 if configured else 503
 
 
@@ -82,13 +84,16 @@ def chat():
     """
     Server-side chat endpoint communicating with your Azure AI Foundry Agent.
     """
-    project_endpoint, agent_name = get_config()
+    project_endpoint, agent_name, agent_id = get_config()
+
+    # Resolve the assistant identifier: prefer AZURE_AI_AGENT_ID (GUID), fall back to AGENT_NAME
+    assistant_identifier = agent_id or agent_name
 
     missing_vars = []
     if not project_endpoint:
         missing_vars.append("FOUNDRY_PROJECT_ENDPOINT")
-    if not agent_name:
-        missing_vars.append("AGENT_NAME")
+    if not assistant_identifier:
+        missing_vars.append("AZURE_AI_AGENT_ID or AGENT_NAME")
 
     if missing_vars:
         error_msg = f"Missing required environment variable(s): {', '.join(missing_vars)}."
@@ -96,7 +101,7 @@ def chat():
         return jsonify({
             "error": "ConfigurationError",
             "message": error_msg,
-            "details": "Ensure FOUNDRY_PROJECT_ENDPOINT and AGENT_NAME are configured."
+            "details": "Ensure FOUNDRY_PROJECT_ENDPOINT and AZURE_AI_AGENT_ID (or AGENT_NAME) are configured."
         }), 500
 
     data = request.get_json(silent=True) or {}
@@ -127,10 +132,10 @@ def chat():
         )
 
         # 3. Create run
-        logger.info(f"Creating run for agent '{agent_name}' on thread '{thread_id}'...")
+        logger.info(f"Creating run for agent '{assistant_identifier}' on thread '{thread_id}'...")
         run = openai_client.beta.threads.runs.create(
             thread_id=thread_id,
-            assistant_id=agent_name
+            assistant_id=assistant_identifier
         )
 
         # 4. Poll status
