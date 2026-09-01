@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
@@ -56,11 +55,6 @@ def get_project_client(project_endpoint: str):
     return _project_client
 
 
-# Backward-compatibility aliases
-get_agents_client = get_project_client
-get_openai_client = get_project_client
-
-
 @app.route("/")
 def home():
     """Renders the chatbot web interface."""
@@ -71,7 +65,7 @@ def home():
 def healthz():
     """Health check probe endpoint for Azure App Service."""
     project_endpoint, agent_name, agent_id = get_config()
-    assistant_identifier = agent_id or agent_name
+    assistant_identifier = agent_name or agent_id
     configured = bool(project_endpoint and assistant_identifier)
     return jsonify({
         "status": "healthy" if configured else "unconfigured",
@@ -84,18 +78,19 @@ def healthz():
 @app.route("/api/chat", methods=["POST"])
 def chat():
     """
-    Server-side chat endpoint communicating with your Azure AI Foundry Agent.
+    Server-side chat endpoint communicating with your Azure AI Foundry Agent
+    via the Prompt Agent conversations & responses API.
     """
     project_endpoint, agent_name, agent_id = get_config()
 
-    # Resolve the assistant identifier: prefer AZURE_AI_AGENT_ID (name/id), fall back to AGENT_NAME
-    assistant_identifier = agent_id or agent_name
+    # Resolve the assistant identifier: prefer AGENT_NAME (e.g., 'doc-assistant'), fall back to AZURE_AI_AGENT_ID
+    assistant_identifier = agent_name or agent_id
 
     missing_vars = []
     if not project_endpoint:
         missing_vars.append("FOUNDRY_PROJECT_ENDPOINT")
     if not assistant_identifier:
-        missing_vars.append("AZURE_AI_AGENT_ID or AGENT_NAME")
+        missing_vars.append("AGENT_NAME or AZURE_AI_AGENT_ID")
 
     if missing_vars:
         error_msg = f"Missing required environment variable(s): {', '.join(missing_vars)}."
@@ -103,7 +98,7 @@ def chat():
         return jsonify({
             "error": "ConfigurationError",
             "message": error_msg,
-            "details": "Ensure FOUNDRY_PROJECT_ENDPOINT and AZURE_AI_AGENT_ID (or AGENT_NAME) are configured."
+            "details": "Ensure FOUNDRY_PROJECT_ENDPOINT and AGENT_NAME (or AZURE_AI_AGENT_ID) are configured."
         }), 500
 
     data = request.get_json(silent=True) or {}
@@ -118,92 +113,44 @@ def chat():
 
     try:
         project_client = get_project_client(project_endpoint)
+        openai_client = project_client.get_openai_client(agent_name=assistant_identifier)
 
-        # 1. Thread creation if new conversation
+        # 1. Conversation creation if new session
         if not thread_id:
-            logger.info("Creating new thread on Azure AI Foundry...")
-            thread = project_client.agents.create_thread()
-            thread_id = thread.id
-            logger.info(f"Thread created: {thread_id}")
+            logger.info(f"Creating new conversation for agent '{assistant_identifier}'...")
+            conversation = openai_client.conversations.create()
+            thread_id = conversation.id
+            logger.info(f"Conversation created: {thread_id}")
 
-        # 2. Append message
-        project_client.agents.create_message(
-            thread_id=thread_id,
-            role="user",
-            content=user_message
+        # 2. Synchronous response execution
+        logger.info(f"Executing response for conversation '{thread_id}'...")
+        response = openai_client.responses.create(
+            conversation=thread_id,
+            input=user_message
         )
 
-        # 3. Create run
-        logger.info(f"Creating run for agent '{assistant_identifier}' on thread '{thread_id}'...")
-        run = project_client.agents.create_run(
-            thread_id=thread_id,
-            assistant_id=assistant_identifier
-        )
+        # 3. Extract output text
+        assistant_reply = getattr(response, "output_text", "")
+        if not assistant_reply and hasattr(response, "text"):
+            assistant_reply = str(response.text)
 
-        # 4. Poll status
-        poll_start = time.time()
-        timeout_seconds = 60
+        logger.info(f"Response received, length: {len(assistant_reply)} chars")
 
-        while run.status in ["queued", "in_progress", "requires_action"]:
-            if time.time() - poll_start > timeout_seconds:
-                logger.warning(f"Agent run timed out after {timeout_seconds}s.")
-                return jsonify({
-                    "error": "TimeoutError",
-                    "message": "The Azure AI Foundry Agent response timed out. Please try again.",
-                    "thread_id": thread_id
-                }), 504
-
-            time.sleep(1)
-            run = project_client.agents.get_run(
-                thread_id=thread_id,
-                run_id=run.id
-            )
-
-        if run.status != "completed":
-            logger.error(f"Agent run failed: {run.status}, details: {getattr(run, 'last_error', None)}")
-            return jsonify({
-                "error": "AgentExecutionError",
-                "message": f"Agent run ended with status: '{run.status}'.",
-                "details": str(getattr(run, "last_error", "Check Azure AI Studio logs.")),
-                "thread_id": thread_id
-            }), 502
-
-        # 5. Extract assistant message
-        messages = project_client.agents.list_messages(thread_id=thread_id)
-        assistant_reply = ""
+        # 4. Extract citations/annotations if present
         citations = []
-        msg_list = getattr(messages, "data", messages)
-
-        for msg in msg_list:
-            role = getattr(msg, "role", "")
-            # Support both string role ('assistant'/'agent') and enum values if present
-            role_str = str(getattr(role, "value", role)).lower()
-            logger.debug(f"Fetched message with role: {role_str}")
-
-            if role_str in ["assistant", "agent"]:
-                contents = getattr(msg, "content", [])
-                for content_part in contents:
-                    content_type = getattr(content_part, "type", "")
-                    content_type_str = str(getattr(content_type, "value", content_type)).lower()
-
-                    if content_type_str == "text":
-                        text_obj = getattr(content_part, "text", None)
-                        assistant_reply = getattr(text_obj, "value", str(text_obj or ""))
-                        annotations = getattr(text_obj, "annotations", []) or []
-                        if annotations:
-                            for idx, annotation in enumerate(annotations):
-                                citation_info = {
-                                    "index": idx + 1,
-                                    "text": getattr(annotation, "text", f"[{idx+1}]"),
-                                    "type": getattr(annotation, "type", "citation"),
-                                    "source": "Azure AI Grounding Source"
-                                }
-                                citations.append(citation_info)
-                if assistant_reply:
-                    break
+        annotations = getattr(response, "annotations", []) or getattr(response, "citations", []) or []
+        if annotations:
+            for idx, annotation in enumerate(annotations):
+                citation_info = {
+                    "index": idx + 1,
+                    "text": getattr(annotation, "text", f"[{idx+1}]"),
+                    "type": getattr(annotation, "type", "citation"),
+                    "source": getattr(annotation, "source", "Azure AI Grounding Source")
+                }
+                citations.append(citation_info)
 
         if not assistant_reply:
-            logger.warning(f"No assistant reply found in messages for thread '{thread_id}'. Message count: {len(list(msg_list))}")
+            logger.warning(f"No reply text found in response for conversation '{thread_id}'.")
 
         return jsonify({
             "reply": assistant_reply,
