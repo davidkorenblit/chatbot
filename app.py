@@ -4,7 +4,7 @@ import time
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
-# Azure AI Projects & Identity SDKs
+# Azure AI Agents & Identity SDKs
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import (
     ClientAuthenticationError,
@@ -12,8 +12,7 @@ from azure.core.exceptions import (
     ResourceNotFoundError,
     ServiceRequestError,
 )
-from azure.ai.projects import AIProjectClient
-from openai import APIConnectionError, APIError
+from azure.ai.agents import AgentsClient
 
 # Configure structured logging
 logging.basicConfig(
@@ -28,8 +27,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # Global client cache
-_project_client = None
-_openai_client = None
+_agents_client = None
 
 
 def get_config():
@@ -42,21 +40,24 @@ def get_config():
     return project_endpoint, agent_name, agent_id
 
 
-def get_openai_client(project_endpoint: str):
+def get_agents_client(project_endpoint: str):
     """
-    Initializes or returns cached OpenAI client via AIProjectClient.get_openai_client().
+    Initializes or returns cached AgentsClient from azure.ai.agents.
     """
-    global _project_client, _openai_client
-    if _openai_client is None:
-        logger.info(f"Initializing AIProjectClient with endpoint: {project_endpoint}...")
+    global _agents_client
+    if _agents_client is None:
+        logger.info(f"Initializing AgentsClient with endpoint: {project_endpoint}...")
         credential = DefaultAzureCredential()
-        _project_client = AIProjectClient(
+        _agents_client = AgentsClient(
             endpoint=project_endpoint,
             credential=credential
         )
-        _openai_client = _project_client.get_openai_client()
-        logger.info("AIProjectClient and OpenAI client initialized successfully.")
-    return _openai_client
+        logger.info("AgentsClient initialized successfully.")
+    return _agents_client
+
+
+# Alias for backward compatibility
+get_openai_client = get_agents_client
 
 
 @app.route("/")
@@ -115,17 +116,17 @@ def chat():
         }), 400
 
     try:
-        openai_client = get_openai_client(project_endpoint)
+        agents_client = get_agents_client(project_endpoint)
 
         # 1. Thread creation if new conversation
         if not thread_id:
             logger.info("Creating new thread on Azure AI Foundry...")
-            thread = openai_client.beta.threads.create()
+            thread = agents_client.threads.create()
             thread_id = thread.id
             logger.info(f"Thread created: {thread_id}")
 
         # 2. Append message
-        openai_client.beta.threads.messages.create(
+        agents_client.messages.create(
             thread_id=thread_id,
             role="user",
             content=user_message
@@ -133,9 +134,9 @@ def chat():
 
         # 3. Create run
         logger.info(f"Creating run for agent '{assistant_identifier}' on thread '{thread_id}'...")
-        run = openai_client.beta.threads.runs.create(
+        run = agents_client.runs.create(
             thread_id=thread_id,
-            assistant_id=assistant_identifier
+            agent_id=assistant_identifier
         )
 
         # 4. Poll status
@@ -152,9 +153,9 @@ def chat():
                 }), 504
 
             time.sleep(1)
-            run = openai_client.beta.threads.runs.retrieve(
-                run_id=run.id,
-                thread_id=thread_id
+            run = agents_client.runs.get(
+                thread_id=thread_id,
+                run_id=run.id
             )
 
         if run.status != "completed":
@@ -167,17 +168,29 @@ def chat():
             }), 502
 
         # 5. Extract assistant message
-        messages = openai_client.beta.threads.messages.list(thread_id=thread_id)
+        messages = agents_client.messages.list(thread_id=thread_id)
         assistant_reply = ""
         citations = []
+        msg_list = getattr(messages, "data", messages)
 
-        for msg in messages.data:
-            if msg.role == "assistant":
-                for content_part in msg.content:
-                    if content_part.type == "text":
-                        assistant_reply = content_part.text.value
-                        if hasattr(content_part.text, "annotations") and content_part.text.annotations:
-                            for idx, annotation in enumerate(content_part.text.annotations):
+        for msg in msg_list:
+            role = getattr(msg, "role", "")
+            # Support both string role ('assistant'/'agent') and enum values if present
+            role_str = str(getattr(role, "value", role)).lower()
+            logger.debug(f"Fetched message with role: {role_str}")
+
+            if role_str in ["assistant", "agent"]:
+                contents = getattr(msg, "content", [])
+                for content_part in contents:
+                    content_type = getattr(content_part, "type", "")
+                    content_type_str = str(getattr(content_type, "value", content_type)).lower()
+
+                    if content_type_str == "text":
+                        text_obj = getattr(content_part, "text", None)
+                        assistant_reply = getattr(text_obj, "value", str(text_obj or ""))
+                        annotations = getattr(text_obj, "annotations", []) or []
+                        if annotations:
+                            for idx, annotation in enumerate(annotations):
                                 citation_info = {
                                     "index": idx + 1,
                                     "text": getattr(annotation, "text", f"[{idx+1}]"),
@@ -185,7 +198,11 @@ def chat():
                                     "source": "Azure AI Grounding Source"
                                 }
                                 citations.append(citation_info)
-                break
+                if assistant_reply:
+                    break
+
+        if not assistant_reply:
+            logger.warning(f"No assistant reply found in messages for thread '{thread_id}'. Message count: {len(list(msg_list))}")
 
         return jsonify({
             "reply": assistant_reply,
@@ -194,12 +211,12 @@ def chat():
             "sender": "bot"
         }), 200
 
-    except APIConnectionError as conn_err:
-        logger.error(f"Connection Error: {conn_err}")
+    except (ServiceRequestError, HttpResponseError) as req_err:
+        logger.error(f"Azure AI Service Request Error: {req_err}")
         return jsonify({
-            "error": "ConnectionError",
-            "message": "Failed to connect to Azure AI Foundry. Please check project endpoint and network.",
-            "details": str(conn_err)
+            "error": "ServiceError",
+            "message": "Failed to communicate with Azure AI Foundry Agent Service.",
+            "details": str(req_err)
         }), 503
 
     except ClientAuthenticationError as auth_err:
