@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 
@@ -27,6 +28,13 @@ app = Flask(__name__)
 
 # Global client cache
 _project_client = None
+
+
+def clean_citations(text: str) -> str:
+    """Removes OpenAI/Foundry-style file citation markers like 【4:0†source】"""
+    if not text:
+        return ""
+    return re.sub(r'【\d+:\d+†[^】]*】', '', text).strip()
 
 
 def get_config():
@@ -133,6 +141,9 @@ def chat():
         assistant_reply = getattr(response, "output_text", "")
         if not assistant_reply and hasattr(response, "text"):
             assistant_reply = str(response.text)
+
+        # Clean citation markers from visible reply text
+        assistant_reply = clean_citations(assistant_reply)
 
         logger.info(f"Response received, length: {len(assistant_reply)} chars")
 
